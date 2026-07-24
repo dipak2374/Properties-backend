@@ -55,7 +55,7 @@ const startServer = async () => {
     if (mongoUri) {
       await connectDB(mongoUri);
     } else {
-      throw new Error('Missing MONGODB_URI in server/.env');
+      throw new Error('Missing MONGODB_URI environment variable. Please define it in server/.env for local development or set it as an environment variable in your hosting provider (e.g., Render Dashboard).');
     }
 
     app.listen(port, () => {
