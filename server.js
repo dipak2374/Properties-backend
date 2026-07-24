@@ -3,6 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const propertyRoutes = require('./routes/propertyRoutes');
@@ -23,7 +24,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
 }
 
@@ -40,7 +41,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(clientBuildPath, 'index.html'));

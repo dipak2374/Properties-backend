@@ -7,7 +7,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node utils/seed.js",
-    "build": "npm install --prefix ../client && npm run build --prefix ../client"
+    "build": "echo 'No frontend build needed for standalone backend'"
   },
   "dependencies": {
     "cors": "^2.8.5",
