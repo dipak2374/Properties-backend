@@ -41,6 +41,16 @@ const sendAuthPopupResponse = (res, provider = 'google', payload, error) => {
   return res.status(200).send(`<!doctype html><html><body><script>${script}</script></body></html>`);
 };
 
+const sendAuthRedirectResponse = (res, payload, error) => {
+  const clientOrigin = process.env.CLIENT_ORIGIN || 'https://properties-frontend-delta.vercel.app';
+  if (error) {
+    return res.redirect(`${clientOrigin}/auth/callback?error=${encodeURIComponent(error)}`);
+  }
+  const token = encodeURIComponent(payload.token);
+  const user = encodeURIComponent(JSON.stringify(payload.user));
+  return res.redirect(`${clientOrigin}/auth/callback?token=${token}&user=${user}`);
+};
+
 // --- Facebook OAuth handlers ---
 exports.startFacebookOAuth = (req, res) => {
   const clientId = process.env.FACEBOOK_CLIENT_ID;
@@ -438,9 +448,9 @@ exports.googleCallback = async (req, res) => {
     }
 
     const authPayload = buildAuthPayload(user);
-    return sendAuthPopupResponse(res, 'google', authPayload, null);
+    return sendAuthRedirectResponse(res, authPayload, null);
   } catch (error) {
-    return sendAuthPopupResponse(res, 'google', null, error.message);
+    return sendAuthRedirectResponse(res, null, error.message);
   }
 };
 
