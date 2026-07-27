@@ -51,6 +51,14 @@ const sendAuthRedirectResponse = (res, payload, error) => {
   return res.redirect(`${clientOrigin}/auth/callback?token=${token}&user=${user}`);
 };
 
+const normalizeRole = (role) => {
+  if (role === 'seller' || role === 'agent') return 'seller';
+  if (role === 'user' || role === 'buyer') return 'user';
+  return 'user';
+};
+
+module.exports.normalizeRole = normalizeRole;
+
 // --- Facebook OAuth handlers ---
 exports.startFacebookOAuth = (req, res) => {
   const clientId = process.env.FACEBOOK_CLIENT_ID;
@@ -363,7 +371,7 @@ exports.startGoogleOAuth = async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = getRedirectUri(req);
   const { role } = req.query || {};
-  const targetRole = ['user', 'seller', 'agent'].includes(role) ? role : 'user';
+  const targetRole = normalizeRole(role);
 
   if (!clientId) {
     try {
@@ -445,9 +453,7 @@ exports.googleCallback = async (req, res) => {
     if (state) {
       try {
         const stateObj = JSON.parse(state);
-        if (stateObj && ['user', 'seller', 'agent'].includes(stateObj.role)) {
-          targetRole = stateObj.role;
-        }
+        targetRole = normalizeRole(stateObj?.role);
       } catch (err) {
         // ignore
       }
@@ -503,7 +509,7 @@ exports.register = async (req, res) => {
       return res.status(409).json({ message: 'An account with that email already exists.' });
     }
 
-    const finalRole = (role === 'seller' || role === 'buyer' || role === 'user') ? role : 'user';
+    const finalRole = normalizeRole(role);
     const uploadedProfilePicture = req.file ? `/uploads/profile-pictures/${req.file.filename}` : undefined;
 
     const user = await User.create({
