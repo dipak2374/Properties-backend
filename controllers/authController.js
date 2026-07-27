@@ -41,14 +41,34 @@ const sendAuthPopupResponse = (res, provider = 'google', payload, error) => {
   return res.status(200).send(`<!doctype html><html><body><script>${script}</script></body></html>`);
 };
 
-const sendAuthRedirectResponse = (res, payload, error) => {
-  const clientOrigin = process.env.CLIENT_ORIGIN || 'https://properties-frontend-delta.vercel.app';
+const extractClientOrigin = (req) => {
+  const explicitOrigin = req.query?.clientOrigin || req.query?.redirectOrigin;
+  if (explicitOrigin) return String(explicitOrigin);
+
+  const requestOrigin = req.headers?.origin || '';
+  if (requestOrigin) return requestOrigin;
+
+  const referer = req.headers?.referer || '';
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (process.env.CLIENT_ORIGIN) return process.env.CLIENT_ORIGIN;
+  return 'https://properties-frontend-umber.vercel.app';
+};
+
+const sendAuthRedirectResponse = (res, payload, error, clientOrigin) => {
+  const targetOrigin = clientOrigin || extractClientOrigin({ query: {}, headers: {} });
   if (error) {
-    return res.redirect(`${clientOrigin}/auth/callback?error=${encodeURIComponent(error)}`);
+    return res.redirect(`${targetOrigin}/auth/callback?error=${encodeURIComponent(error)}`);
   }
   const token = encodeURIComponent(payload.token);
   const user = encodeURIComponent(JSON.stringify(payload.user));
-  return res.redirect(`${clientOrigin}/auth/callback?token=${token}&user=${user}`);
+  return res.redirect(`${targetOrigin}/auth/callback?token=${token}&user=${user}`);
 };
 
 const normalizeRole = (role) => {
@@ -370,8 +390,9 @@ const getRedirectUri = (req) => {
 exports.startGoogleOAuth = async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = getRedirectUri(req);
-  const { role } = req.query || {};
+  const { role, clientOrigin } = req.query || {};
   const targetRole = normalizeRole(role);
+  const resolvedClientOrigin = clientOrigin || extractClientOrigin(req);
 
   if (!clientId) {
     try {
@@ -385,9 +406,9 @@ exports.startGoogleOAuth = async (req, res) => {
         });
       }
       const authPayload = buildAuthPayload(user);
-      return sendAuthRedirectResponse(res, authPayload, null);
+      return sendAuthRedirectResponse(res, authPayload, null, resolvedClientOrigin);
     } catch (err) {
-      return sendAuthRedirectResponse(res, null, 'Google Sign-In failed.');
+      return sendAuthRedirectResponse(res, null, 'Google Sign-In failed.', resolvedClientOrigin);
     }
   }
 
@@ -398,7 +419,7 @@ exports.startGoogleOAuth = async (req, res) => {
   authorizeUrl.searchParams.set('scope', 'openid email profile');
   authorizeUrl.searchParams.set('access_type', 'offline');
   authorizeUrl.searchParams.set('prompt', 'select_account');
-  authorizeUrl.searchParams.set('state', JSON.stringify({ role: targetRole }));
+  authorizeUrl.searchParams.set('state', JSON.stringify({ role: targetRole, clientOrigin: resolvedClientOrigin }));
 
   return res.redirect(authorizeUrl.toString());
 };
@@ -450,10 +471,12 @@ exports.googleCallback = async (req, res) => {
     let user = await User.findOne({ email });
 
     let targetRole = 'user';
+    let callbackOrigin = null;
     if (state) {
       try {
         const stateObj = JSON.parse(state);
         targetRole = normalizeRole(stateObj?.role);
+        callbackOrigin = stateObj?.clientOrigin || null;
       } catch (err) {
         // ignore
       }
@@ -469,9 +492,9 @@ exports.googleCallback = async (req, res) => {
     }
 
     const authPayload = buildAuthPayload(user);
-    return sendAuthRedirectResponse(res, authPayload, null);
+    return sendAuthRedirectResponse(res, authPayload, null, callbackOrigin || extractClientOrigin(req));
   } catch (error) {
-    return sendAuthRedirectResponse(res, null, error.message);
+    return sendAuthRedirectResponse(res, null, error.message, callbackOrigin || extractClientOrigin(req));
   }
 };
 
