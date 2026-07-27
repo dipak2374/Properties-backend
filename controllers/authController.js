@@ -362,22 +362,24 @@ const getRedirectUri = (req) => {
 exports.startGoogleOAuth = async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = getRedirectUri(req);
+  const { role } = req.query || {};
+  const targetRole = ['user', 'seller', 'agent'].includes(role) ? role : 'user';
 
   if (!clientId) {
     try {
-      let user = await User.findOne({ email: 'google.demo@propertyhub.com' });
+      let user = await User.findOne({ email: `google.demo.${targetRole}@propertyhub.com` });
       if (!user) {
         user = await User.create({
-          name: 'Google User',
-          email: 'google.demo@propertyhub.com',
+          name: `Google ${targetRole.charAt(0).toUpperCase() + targetRole.slice(1)} User`,
+          email: `google.demo.${targetRole}@propertyhub.com`,
           password: hashPassword(`demo-${Date.now()}`),
-          role: 'user',
+          role: targetRole,
         });
       }
       const authPayload = buildAuthPayload(user);
-      return sendAuthPopupResponse(res, 'google', authPayload, null);
+      return sendAuthRedirectResponse(res, authPayload, null);
     } catch (err) {
-      return sendAuthPopupResponse(res, 'google', null, 'Google Sign-In failed.');
+      return sendAuthRedirectResponse(res, null, 'Google Sign-In failed.');
     }
   }
 
@@ -388,22 +390,23 @@ exports.startGoogleOAuth = async (req, res) => {
   authorizeUrl.searchParams.set('scope', 'openid email profile');
   authorizeUrl.searchParams.set('access_type', 'offline');
   authorizeUrl.searchParams.set('prompt', 'select_account');
+  authorizeUrl.searchParams.set('state', JSON.stringify({ role: targetRole }));
 
   return res.redirect(authorizeUrl.toString());
 };
 
 exports.googleCallback = async (req, res) => {
-  const { code, error } = req.query || {};
+  const { code, error, state } = req.query || {};
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = getRedirectUri(req);
 
   if (error) {
-    return sendAuthPopupResponse(res, 'google', null, error);
+    return sendAuthRedirectResponse(res, null, error);
   }
 
   if (!code || !clientId || !clientSecret) {
-    return sendAuthPopupResponse(res, 'google', null, 'Google OAuth is not configured. Using demo sign-in instead.');
+    return sendAuthRedirectResponse(res, null, 'Google OAuth is not configured. Using demo sign-in instead.');
   }
 
   try {
@@ -438,12 +441,24 @@ exports.googleCallback = async (req, res) => {
     const email = String(payload.email || '').toLowerCase();
     let user = await User.findOne({ email });
 
+    let targetRole = 'user';
+    if (state) {
+      try {
+        const stateObj = JSON.parse(state);
+        if (stateObj && ['user', 'seller', 'agent'].includes(stateObj.role)) {
+          targetRole = stateObj.role;
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
     if (!user) {
       user = await User.create({
         name: payload.name || payload.given_name || email.split('@')[0],
         email,
         password: hashPassword(`${Date.now()}-${Math.random()}`),
-        role: 'user',
+        role: targetRole,
       });
     }
 
