@@ -29,6 +29,24 @@ exports.getPropertyById = async (req, res) => {
   }
 };
 
+exports.deleteProperty = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const property = await Property.findByIdAndDelete(id);
+
+    if (!property) {
+      return res.status(404).json({ message: 'Property not found' });
+    }
+
+    return res.json({ message: 'Property deleted successfully' });
+  } catch (error) {
+    if (error.kind === 'ObjectId' || error.name === 'CastError') {
+      return res.status(404).json({ message: 'Property not found' });
+    }
+    return res.status(500).json({ message: 'Unable to delete property', error: error.message });
+  }
+};
+
 exports.createProperty = async (req, res) => {
   try {
     const { title, description, price, location, propertyType, listingType, status, bedrooms, bathrooms, areaSqFt, yearBuilt, amenities, images, category, owner } = req.body || {};
